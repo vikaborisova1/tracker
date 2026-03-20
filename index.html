@@ -223,6 +223,34 @@
 
   .empty { text-align: center; padding: 32px 0; color: var(--text3); font-size: 13px; }
 
+  /* Calendar */
+  .calendar-view { display: none; }
+  .calendar-view.active { display: block; }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .cal-nav-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .cal-nav-btns { display: flex; gap: 6px; }
+  .cal-nav-btn { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text2); font-size: 14px; transition: all 0.15s; }
+  .cal-nav-btn:hover { border-color: var(--border-strong); color: var(--text); }
+  .cal-today-btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 12px; font-family: 'Onest', sans-serif; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .cal-today-btn:hover { border-color: var(--border-strong); color: var(--text); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .cal-dow { background: var(--surface2); padding: 8px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); text-align: center; }
+  .cal-cell { background: var(--surface); min-height: 100px; padding: 8px; position: relative; }
+  .cal-cell.other-month { background: var(--bg); }
+  .cal-cell.is-today { background: #FAFBFF; }
+  .cal-cell.is-today .cal-day-num { background: var(--accent); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+  .cal-day-num { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+  .cal-cell.other-month .cal-day-num { color: var(--text3); }
+  .cal-task { border-radius: 3px; padding: 2px 6px; margin-bottom: 2px; font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity 0.1s; border-left: 2px solid transparent; }
+  .cal-task:hover { opacity: 0.8; }
+  .cal-task.ct-todo { background: var(--surface2); color: var(--text2); border-left-color: var(--text3); }
+  .cal-task.ct-doing { background: var(--accent-light); color: var(--accent); border-left-color: var(--accent); }
+  .cal-task.ct-done { background: var(--green-light); color: var(--green); border-left-color: var(--green); }
+  .cal-task.ct-overdue { background: var(--red-light); color: var(--red); border-left-color: var(--red); }
+  .cal-more { font-size: 10px; color: var(--text3); cursor: pointer; padding: 1px 4px; }
+  .cal-more:hover { color: var(--accent); }
+  @media (max-width: 700px) { .cal-cell { min-height: 60px; padding: 4px; } .cal-task { display: none; } }
+
   /* Toast */
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 300; white-space: nowrap; }
   .toast.show { opacity: 1; }
@@ -278,6 +306,10 @@
         <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="1" width="11" height="2" rx="1" fill="currentColor"/><rect x="1" y="5" width="11" height="2" rx="1" fill="currentColor" opacity="0.7"/><rect x="1" y="9" width="11" height="2" rx="1" fill="currentColor" opacity="0.5"/></svg>
         Таблица
       </button>
+      <button class="tab-btn" id="tab-calendar" onclick="switchTab('calendar')">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="2.5" width="11" height="9.5" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M1 6h11" stroke="currentColor" stroke-width="1.3"/><path d="M4 1v3M9 1v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Календарь
+      </button>
     </div>
     <div class="filter-group">
       <select class="filter-select" id="filter-project" onchange="render()"><option value="">Все проекты</option></select>
@@ -328,7 +360,21 @@
     </table>
   </div>
 
-  <div class="members-section">
+  <div class="calendar-view" id="calendar-view">
+    <div class="cal-nav">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="cal-nav-title" id="cal-title"></div>
+        <button class="cal-today-btn" onclick="calGoToday()">Сегодня</button>
+      </div>
+      <div class="cal-nav-btns">
+        <button class="cal-nav-btn" onclick="calMove(-1)">‹</button>
+        <button class="cal-nav-btn" onclick="calMove(1)">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+
+
     <div class="members-title">Нагрузка по участникам</div>
     <div class="members-grid" id="members-grid"></div>
   </div>
@@ -427,6 +473,7 @@ let members = [...DEFAULT_MEMBERS];
 let currentTab = 'board';
 let editingId = null;
 let detailId = null;
+let calDate = new Date();
 
 // ── API helpers ──────────────────────────────────────
 function setSyncing(state) {
@@ -439,7 +486,7 @@ function setSyncing(state) {
 async function api(action, body) {
   setSyncing('syncing');
   try {
-    const isGet = action === 'getTasks' || action === 'getProjects';
+    const isGet = action === 'getTasks' || action === 'getProjects' || action === 'getMembers';
     const url = isGet ? SCRIPT_URL + '?action=' + action : SCRIPT_URL;
     const opts = isGet ? {} : { method: 'POST', body: JSON.stringify({ action, ...body }) };
     const res = await fetch(url, opts);
@@ -475,7 +522,15 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function memberIdx(n) { return members.indexOf(n); }
 function memberColor(n) { const i=memberIdx(n); return i>=0?ALL_AV_COLORS[i%ALL_AV_COLORS.length]:'av-0'; }
 function initials(n) { return (n||'').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
-function deadlineStatus(dl) { if(!dl) return ''; if(dl<today()) return 'overdue'; if(dl<=weekFromNow()) return 'soon'; return ''; }
+function normalizeDate(dl) {
+  if(!dl) return '';
+  const s = String(dl).trim();
+  if(s.match(/^\d{4}-\d{2}-\d{2}$/)) return s;
+  const d = new Date(s);
+  if(isNaN(d)) return '';
+  return d.toISOString().slice(0,10);
+}
+function deadlineStatus(dl) { const n=normalizeDate(dl); if(!n) return ''; if(n<today()) return 'overdue'; if(n<=weekFromNow()) return 'soon'; return ''; }
 function formatDate(dl) {
   if(!dl) return '—';
   const s = String(dl).trim();
@@ -515,7 +570,9 @@ function render() {
   renderProjectSelects();
   renderMemberSelects();
   renderStats();
-  currentTab==='board' ? renderBoard() : renderTable();
+  if (currentTab==='board') renderBoard();
+  else if (currentTab==='table') renderTable();
+  else if (currentTab==='calendar') renderCalendar();
   renderMembers();
 }
 
@@ -614,13 +671,83 @@ function renderMembers() {
   }).join('');
 }
 
-// ── CRUD ─────────────────────────────────────────────
+// ── Calendar ─────────────────────────────────────────
+const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const DAYS_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+function calMove(dir) { calDate.setMonth(calDate.getMonth()+dir); renderCalendar(); }
+function calGoToday() { calDate = new Date(); renderCalendar(); }
+
+function renderCalendar() {
+  const filtered = getFiltered().filter(t => t.deadline);
+  const yr = calDate.getFullYear();
+  const mo = calDate.getMonth();
+  document.getElementById('cal-title').textContent = MONTHS_RU[mo] + ' ' + yr;
+
+  const todayStr = today();
+
+  // First cell: Monday of the week containing 1st of month
+  const firstDay = new Date(yr, mo, 1);
+  const startDow = (firstDay.getDay()+6)%7; // 0=Mon
+  const startDate = new Date(yr, mo, 1-startDow);
+
+  // Last cell: Sunday of the week containing last day of month
+  const lastDay = new Date(yr, mo+1, 0);
+  const endDow = (lastDay.getDay()+6)%7;
+  const endDate = new Date(yr, mo+1, 0+(6-endDow));
+
+  // Build tasks-by-date map
+  const byDate = {};
+  filtered.forEach(t => {
+    const dl = normalizeDate(t.deadline);
+    if(!dl) return;
+    if(!byDate[dl]) byDate[dl]=[];
+    byDate[dl].push(t);
+  });
+
+  let html = DAYS_SHORT.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+  const cur = new Date(startDate);
+  while(cur <= endDate) {
+    const dateStr = cur.toISOString().slice(0,10);
+    const isThisMonth = cur.getMonth()===mo;
+    const isToday = dateStr===todayStr;
+    const dayTasks = byDate[dateStr]||[];
+
+    const MAX_VISIBLE = 3;
+    const visible = dayTasks.slice(0, MAX_VISIBLE);
+    const extra = dayTasks.length - MAX_VISIBLE;
+
+    const taskItems = visible.map(t => {
+      const ds = deadlineStatus(t.deadline);
+      let cls = 'ct-'+t.status;
+      if(t.status!=='done' && ds==='overdue') cls='ct-overdue';
+      const proj = t.project ? `[${esc(t.project)}] ` : '';
+      return `<div class="cal-task ${cls}" onclick="openDetail('${t.id}')" title="${esc(t.title)}">${proj}${esc(t.title)}</div>`;
+    }).join('');
+
+    const moreEl = extra>0 ? `<div class="cal-more">+${extra} ещё</div>` : '';
+
+    html += `<div class="cal-cell ${!isThisMonth?'other-month':''} ${isToday?'is-today':''}">
+      <div class="cal-day-num">${cur.getDate()}</div>
+      ${taskItems}${moreEl}
+    </div>`;
+
+    cur.setDate(cur.getDate()+1);
+  }
+
+  document.getElementById('cal-grid').innerHTML = html;
+}
+
+
 function switchTab(tab) {
   currentTab=tab;
-  document.getElementById('kanban-view').classList.toggle('hidden',tab!=='board');
-  document.getElementById('table-view').classList.toggle('active',tab==='table');
-  document.getElementById('tab-board').classList.toggle('active',tab==='board');
-  document.getElementById('tab-table').classList.toggle('active',tab==='table');
+  document.getElementById('kanban-view').classList.toggle('hidden', tab!=='board');
+  document.getElementById('table-view').classList.toggle('active', tab==='table');
+  document.getElementById('calendar-view').classList.toggle('active', tab==='calendar');
+  document.getElementById('tab-board').classList.toggle('active', tab==='board');
+  document.getElementById('tab-table').classList.toggle('active', tab==='table');
+  document.getElementById('tab-calendar').classList.toggle('active', tab==='calendar');
   render();
 }
 
@@ -822,8 +949,8 @@ if(SCRIPT_URL==='ВСТАВЬ_СЮДА_URL_СКРИПТА'){
   render();
 } else {
   loadAll();
-  // Авто-обновление каждые 30 минут
-  setInterval(loadAll, 1800000);
+  // Авто-обновление каждые 30 секунд
+  setInterval(loadAll, 30000);
 }
 </script>
 </body>
