@@ -542,11 +542,11 @@ function formatDate(dl) {
   const y=date.getFullYear();
   return `${d}.${m}.${y}`;
 }
-function deadlineLabel(dl) {
+function deadlineLabel(dl, status) {
   if(!dl) return null;
   const s = deadlineStatus(dl);
-  if(s==='overdue') return {text:'Просрочено',cls:'red'};
-  if(s==='soon') return {text:formatDate(dl),cls:'amber'};
+  if(s==='overdue' && status!=='done') return {text:'Просрочено',cls:'red'};
+  if(s==='soon' && status!=='done') return {text:formatDate(dl),cls:'amber'};
   return {text:formatDate(dl),cls:''};
 }
 function projectColor(n) { const i=projects.indexOf(n); return i>=0?PC_COLORS[i%PC_COLORS.length]:'pc-0'; }
@@ -599,7 +599,7 @@ function renderStats() {
 
 function taskCardHTML(t) {
   const avCls = memberColor(t.member);
-  const dl = deadlineLabel(t.deadline);
+  const dl = deadlineLabel(t.deadline, t.status);
   const ds = deadlineStatus(t.deadline);
   const bc = t.status!=='done'&&ds==='overdue'?'overdue':t.status!=='done'&&ds==='soon'?'due-soon':'';
   return `<div class="task-card ${bc}" onclick="openDetail('${t.id}')">
@@ -632,7 +632,7 @@ function renderTable() {
   if(!filtered.length){tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3);">Нет задач</td></tr>`;return;}
   tbody.innerHTML = filtered.map(t=>{
     const avCls = memberColor(t.member);
-    const dl = deadlineLabel(t.deadline);
+    const dl = deadlineLabel(t.deadline, t.status);
     const ds = deadlineStatus(t.deadline);
     const dlCls = t.status!=='done'&&ds==='overdue'?'red':t.status!=='done'&&ds==='soon'?'amber':'';
     return `<tr>
@@ -825,7 +825,7 @@ function openDetail(id) {
   document.getElementById('d-project').innerHTML=t.project?projectTagHTML(t.project):'<span style="color:var(--text3)">—</span>';
   const avCls=memberColor(t.member);
   document.getElementById('d-member').innerHTML=`<div style="display:flex;align-items:center;gap:8px;"><div class="avatar ${avCls}" style="width:24px;height:24px;font-size:10px;">${initials(t.member)}</div>${esc(t.member)}</div>`;
-  const dl=deadlineLabel(t.deadline), ds=deadlineStatus(t.deadline);
+  const dl=deadlineLabel(t.deadline, t.status), ds=deadlineStatus(t.deadline);
   document.getElementById('d-deadline').innerHTML=dl?`<span style="color:var(--${t.status!=='done'&&ds==='overdue'?'red':t.status!=='done'&&ds==='soon'?'amber':'text'})">${dl.text}</span>`:'—';
   const df=document.getElementById('d-desc-field');
   if(t.desc){df.style.display='';document.getElementById('d-desc').textContent=t.desc;}else df.style.display='none';
