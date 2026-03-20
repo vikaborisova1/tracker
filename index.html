@@ -92,7 +92,8 @@
   .tab-btn { padding: 6px 14px; border: none; background: none; border-radius: 4px; font-size: 13px; font-family: 'Onest', sans-serif; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
   .tab-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
   .filter-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .filter-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 12px; font-family: 'Onest', sans-serif; color: var(--text); cursor: pointer; outline: none; }
+  .filter-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 12px; font-family: 'Onest', sans-serif; color: var(--text); cursor: pointer; outline: none; max-width: 140px; }
+  .filter-select.active { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
   .manage-projects-btn { display: flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: none; font-size: 12px; font-family: 'Onest', sans-serif; color: var(--text3); cursor: pointer; transition: all 0.15s; }
   .manage-projects-btn:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -312,14 +313,17 @@
       </button>
     </div>
     <div class="filter-group">
-      <select class="filter-select" id="filter-project" onchange="render()"><option value="">Все проекты</option></select>
-      <select class="filter-select" id="filter-member" onchange="render()"><option value="">Все участники</option></select>
-      <select class="filter-select" id="filter-status" onchange="render()">
+      <select class="filter-select" id="filter-project" onchange="this.classList.toggle('active',!!this.value);render()"><option value="">Все проекты</option></select>
+      <select class="filter-select" id="filter-member" onchange="this.classList.toggle('active',!!this.value);render()"><option value="">Все участники</option></select>
+      <select class="filter-select" id="filter-status" onchange="this.classList.toggle('active',!!this.value);render()">
         <option value="">Все статусы</option>
         <option value="todo">К выполнению</option>
         <option value="doing">В работе</option>
         <option value="done">Готово</option>
       </select>
+      <button class="manage-projects-btn" id="btn-reset-filters" onclick="resetFilters()" style="display:none;border-color:var(--red);color:var(--red);">
+        ✕ Сбросить
+      </button>
       <button class="manage-projects-btn" onclick="openProjectsModal()">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         Проекты
@@ -563,7 +567,20 @@ function getFiltered() {
   const fm = document.getElementById('filter-member').value;
   const fs = document.getElementById('filter-status').value;
   const fp = document.getElementById('filter-project').value;
+  const hasFilter = fm || fs || fp;
+  const btn = document.getElementById('btn-reset-filters');
+  if(btn) btn.style.display = hasFilter ? '' : 'none';
   return tasks.filter(t => (!fm||t.member===fm) && (!fs||t.status===fs) && (!fp||t.project===fp));
+}
+
+function resetFilters() {
+  ['filter-project','filter-member','filter-status'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = '';
+    el.classList.remove('active');
+  });
+  document.getElementById('btn-reset-filters').style.display = 'none';
+  render();
 }
 
 function render() {
@@ -577,17 +594,31 @@ function render() {
 }
 
 function renderProjectSelects() {
-  const opts = `<option value="">— без проекта —</option>` + projects.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
-  document.getElementById('f-project').innerHTML = opts;
-  const fopts = `<option value="">Все проекты</option>` + projects.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
-  document.getElementById('filter-project').innerHTML = fopts;
+  const fp = document.getElementById('filter-project');
+  const fp_val = fp.value;
+  fp.innerHTML = `<option value="">Все проекты</option>` + projects.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  if(fp_val) fp.value = fp_val;
+  fp.classList.toggle('active', !!fp.value);
+
+  const fm = document.getElementById('f-project');
+  const fm_val = fm ? fm.value : '';
+  const fopts = `<option value="">— без проекта —</option>` + projects.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  if(fm) { fm.innerHTML = fopts; if(fm_val) fm.value = fm_val; }
 }
 
 function renderMemberSelects() {
-  const opts = `<option value="">Выбрать...</option>` + members.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
-  document.getElementById('f-member').innerHTML = opts;
-  const fopts = `<option value="">Все участники</option>` + members.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
-  document.getElementById('filter-member').innerHTML = fopts;
+  const fm = document.getElementById('filter-member');
+  const fm_val = fm.value;
+  fm.innerHTML = `<option value="">Все участники</option>` + members.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  if(fm_val) fm.value = fm_val;
+  fm.classList.toggle('active', !!fm.value);
+
+  const fs = document.getElementById('filter-status');
+  fs.classList.toggle('active', !!fs.value);
+
+  const ff = document.getElementById('f-member');
+  const ff_val = ff ? ff.value : '';
+  if(ff) { ff.innerHTML = `<option value="">Выбрать...</option>` + members.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join(''); if(ff_val) ff.value = ff_val; }
 }
 
 function renderStats() {
