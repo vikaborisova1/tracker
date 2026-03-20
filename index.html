@@ -520,8 +520,9 @@ async function loadAll() {
 
 // ── Helpers ──────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
-function today() { return new Date().toISOString().slice(0,10); }
-function weekFromNow() { const d = new Date(); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); }
+function localDateStr(d) { const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+function today() { return localDateStr(new Date()); }
+function weekFromNow() { const d=new Date(); d.setDate(d.getDate()+7); return localDateStr(d); }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function memberIdx(n) { return members.indexOf(n); }
 function memberColor(n) { const i=memberIdx(n); return i>=0?ALL_AV_COLORS[i%ALL_AV_COLORS.length]:'av-0'; }
@@ -532,7 +533,7 @@ function normalizeDate(dl) {
   if(s.match(/^\d{4}-\d{2}-\d{2}$/)) return s;
   const d = new Date(s);
   if(isNaN(d)) return '';
-  return d.toISOString().slice(0,10);
+  return localDateStr(d);
 }
 function deadlineStatus(dl) { const n=normalizeDate(dl); if(!n) return ''; if(n<today()) return 'overdue'; if(n<=weekFromNow()) return 'soon'; return ''; }
 function formatDate(dl) {
@@ -740,7 +741,7 @@ function renderCalendar() {
 
   const cur = new Date(startDate);
   while(cur <= endDate) {
-    const dateStr = cur.toISOString().slice(0,10);
+    const dateStr = localDateStr(cur);
     const isThisMonth = cur.getMonth()===mo;
     const isToday = dateStr===todayStr;
     const dayTasks = byDate[dateStr]||[];
@@ -980,7 +981,7 @@ if(SCRIPT_URL==='ВСТАВЬ_СЮДА_URL_СКРИПТА'){
   render();
 } else {
   loadAll();
-  // Авто-обновление каждые 30 минут
+  // Авто-обновление каждые 30 секунд
   setInterval(loadAll, 1800000);
 }
 </script>
