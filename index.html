@@ -648,13 +648,25 @@ function taskCardHTML(t) {
   </div>`;
 }
 
+function sortByDeadline(list) {
+  return list.slice().sort((a, b) => {
+    const da = normalizeDate(a.deadline);
+    const db = normalizeDate(b.deadline);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+}
+
 function renderBoard() {
   const filtered = getFiltered();
   const cols = {todo:[],doing:[],done:[]};
   filtered.forEach(t=>cols[t.status]&&cols[t.status].push(t));
   ['todo','doing','done'].forEach(s=>{
-    document.getElementById('col-'+s).innerHTML = cols[s].length?cols[s].map(taskCardHTML).join(''):`<div class="empty">Нет задач</div>`;
-    document.getElementById('cnt-'+s).textContent = cols[s].length;
+    const sorted = s === 'done' ? cols[s] : sortByDeadline(cols[s]);
+    document.getElementById('col-'+s).innerHTML = sorted.length?sorted.map(taskCardHTML).join(''):`<div class="empty">Нет задач</div>`;
+    document.getElementById('cnt-'+s).textContent = sorted.length;
   });
 }
 
