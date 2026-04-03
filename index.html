@@ -59,6 +59,13 @@
   .col-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);}
   .col-title{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text2);}
   .col-dot{width:7px;height:7px;border-radius:50%;} .dot-todo{background:var(--text3);} .dot-doing{background:var(--accent);} .dot-done{background:var(--green);}
+  .col-toggle{background:none;border:none;cursor:pointer;color:var(--text3);font-size:11px;padding:2px 6px;border-radius:4px;transition:all 0.15s;display:flex;align-items:center;gap:4px;}
+  .col-toggle:hover{background:var(--border);color:var(--text2);}
+  .col-toggle svg{transition:transform 0.2s;}
+  .col-done-collapsed #col-done{display:none;}
+  .col-done-collapsed{min-height:auto!important;}
+  .col-done-collapsed .col-toggle svg{transform:rotate(-90deg);}
+  .col-done-collapsed .col-head{border-bottom:none;margin-bottom:0;padding-bottom:0;}
   .col-count{font-size:11px;font-family:'JetBrains Mono',monospace;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1px 8px;color:var(--text2);}
   .task-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;box-shadow:var(--shadow);cursor:pointer;transition:box-shadow 0.15s,transform 0.1s;position:relative;}
   .task-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);}
@@ -278,8 +285,15 @@
         <div class="col-head"><div class="col-title"><span class="col-dot dot-doing"></span>В работе</div><span class="col-count" id="cnt-doing">0</span></div>
         <div id="col-doing"></div>
       </div>
-      <div class="column">
-        <div class="col-head"><div class="col-title"><span class="col-dot dot-done"></span>Готово</div><span class="col-count" id="cnt-done">0</span></div>
+      <div class="column col-done-collapsed" id="column-done">
+        <div class="col-head"><div class="col-title"><span class="col-dot dot-done"></span>Готово</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="col-count" id="cnt-done">0</span>
+            <button class="col-toggle" onclick="toggleDoneColumn()" title="Свернуть / развернуть">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
         <div id="col-done"></div>
       </div>
     </div>
@@ -855,7 +869,11 @@ async function changeStatus(id,status){
 }
 function closeDetailModal(){document.getElementById('detail-modal').classList.remove('open');}
 
-// ── Projects ──────────────────────────────────────────
+function toggleDoneColumn(){
+  document.getElementById('column-done').classList.toggle('col-done-collapsed');
+}
+
+
 function openProjectsModal(){renderProjList();document.getElementById('projects-modal').classList.add('open');setTimeout(()=>document.getElementById('new-proj-input').focus(),50);}
 async function closeProjectsModal(){document.getElementById('projects-modal').classList.remove('open');await api('saveProjects',{projects});render();}
 function renderProjList(){
