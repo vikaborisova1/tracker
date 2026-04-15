@@ -208,7 +208,24 @@
   .score-bar-wrap{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;}
   .score-bar{height:100%;border-radius:4px;transition:width 0.5s;}
   .score-pct{font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;min-width:40px;text-align:right;}
-  /* PDF export */
+  /* Heatmap */
+  .heatmap-wrap{overflow-x:auto;padding-bottom:4px;}
+  .heatmap-grid{display:flex;gap:3px;align-items:flex-start;}
+  .heatmap-months{display:flex;margin-left:28px;margin-bottom:4px;}
+  .heatmap-month-label{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+  .heatmap-col{display:flex;flex-direction:column;gap:3px;}
+  .heatmap-day-labels{display:flex;flex-direction:column;gap:3px;margin-right:4px;padding-top:0;}
+  .heatmap-day-label{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;height:13px;line-height:13px;width:20px;text-align:right;}
+  .heatmap-cell{width:13px;height:13px;border-radius:2px;cursor:default;transition:opacity 0.1s;}
+  .heatmap-cell:hover{opacity:0.75;cursor:pointer;}
+  .hm-0{background:var(--surface2);}
+  .hm-1{background:#C6E6D5;}
+  .hm-2{background:#7ECBA5;}
+  .hm-3{background:#3DA874;}
+  .hm-4{background:#1E7D4E;}
+  .heatmap-legend{display:flex;align-items:center;gap:6px;margin-top:12px;justify-content:flex-end;}
+  .heatmap-legend span{font-size:11px;color:var(--text3);}
+  .hm-legend-cell{width:12px;height:12px;border-radius:2px;}
   .btn-export{display:flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);font-size:12px;font-family:'Onest',sans-serif;font-weight:500;color:var(--text2);cursor:pointer;transition:all 0.15s;}
   .btn-export:hover{border-color:var(--accent);color:var(--accent);}
   .empty{text-align:center;padding:32px 0;color:var(--text3);font-size:13px;}
@@ -376,6 +393,25 @@
       <div class="analytics-card full">
         <h3>Динамика — закрытые задачи по неделям</h3>
         <div class="chart-wrap" style="height:160px;"><canvas id="chart-trend"></canvas></div>
+      </div>
+      <div class="analytics-card full">
+        <h3>Тепловая карта активности — выполненные задачи</h3>
+        <div class="heatmap-wrap">
+          <div id="heatmap-months" class="heatmap-months"></div>
+          <div class="heatmap-grid">
+            <div class="heatmap-day-labels" id="heatmap-day-labels"></div>
+            <div id="heatmap-cols" style="display:flex;gap:3px;"></div>
+          </div>
+        </div>
+        <div class="heatmap-legend">
+          <span>Меньше</span>
+          <div class="hm-legend-cell hm-0"></div>
+          <div class="hm-legend-cell hm-1"></div>
+          <div class="hm-legend-cell hm-2"></div>
+          <div class="hm-legend-cell hm-3"></div>
+          <div class="hm-legend-cell hm-4"></div>
+          <span>Больше</span>
+        </div>
       </div>
     </div>
   </div>
@@ -848,6 +884,39 @@ function renderAnalytics(){
   const wk=Object.keys(weekMap).sort();
   chartTrend=destroyChart(chartTrend);
   chartTrend=new Chart(document.getElementById('chart-trend').getContext('2d'),{type:'line',data:{labels:wk.map(k=>{const[y,m,d]=k.split('-');return `${d}.${m}`;}),datasets:[{label:'Закрыто задач',data:wk.map(k=>weekMap[k]),borderColor:'#2D5BE3',backgroundColor:'rgba(45,91,227,0.08)',tension:0.3,pointRadius:4,pointBackgroundColor:'#2D5BE3',fill:true,borderWidth:2}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{family:'JetBrains Mono',size:10}},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{font:{family:'Onest',size:11},maxRotation:0}}},maintainAspectRatio:false}});
+  renderHeatmap(tasks);
+}
+
+function renderHeatmap(allTasks){
+  const MONTHS_SHORT=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+  const DAY_LABELS=["","Пн","","Ср","","Пт",""];
+  const countMap={};
+  allTasks.filter(t=>t.status==="done"&&t.deadline).forEach(t=>{ const d=normalizeDate(t.deadline); if(d) countMap[d]=(countMap[d]||0)+1; });
+  const todayDate=new Date(), todayMon=(todayDate.getDay()+6)%7;
+  const endDate=new Date(todayDate); endDate.setDate(endDate.getDate()+(6-todayMon));
+  const WEEKS=26, startDate=new Date(endDate); startDate.setDate(endDate.getDate()-(WEEKS*7-1));
+  const startDow=(startDate.getDay()+6)%7; startDate.setDate(startDate.getDate()-startDow);
+  const cols=[], cur=new Date(startDate);
+  while(cur<=endDate){
+    const week=[];
+    for(let d=0;d<7;d++){ const ds=localDateStr(cur),count=countMap[ds]||0; week.push({ds,count,month:cur.getMonth(),isFuture:cur>todayDate}); cur.setDate(cur.getDate()+1); }
+    cols.push(week);
+  }
+  const maxCount=Math.max(1,...Object.values(countMap));
+  function colorClass(count,isFuture){ if(isFuture||count===0) return "hm-0"; const r=count/maxCount; return r<=0.25?"hm-1":r<=0.5?"hm-2":r<=0.75?"hm-3":"hm-4"; }
+  let monthHtml="",lastMonth=-1;
+  cols.forEach((week,wi)=>{ const mo=week[0].month; if(mo!==lastMonth){ monthHtml+=`<div class="heatmap-month-label" style="min-width:16px;">${MONTHS_SHORT[mo]}</div>`; lastMonth=mo; } else { monthHtml+=`<div style="min-width:16px;"></div>`; } });
+  document.getElementById("heatmap-months").innerHTML=monthHtml;
+  document.getElementById("heatmap-day-labels").innerHTML=DAY_LABELS.map(l=>`<div class="heatmap-day-label">${l}</div>`).join("");
+  document.getElementById("heatmap-cols").innerHTML=cols.map(week=>{ const cells=week.map(cell=>{ const cls=colorClass(cell.count,cell.isFuture),tip=cell.count>0?`${cell.count} зад. — ${formatDate(cell.ds)}`:formatDate(cell.ds); return `<div class="heatmap-cell ${cls}" title="${tip}" onclick="heatmapDayClick('${cell.ds}',${cell.count})"></div>`; }).join(""); return `<div class="heatmap-col">${cells}</div>`; }).join("");
+}
+function heatmapDayClick(dateStr,count){
+  if(!count) return;
+  showToast(`${count} зад. выполнено ${formatDate(dateStr)}`);
+  switchTab("table");
+  const tbody=document.getElementById("table-body");
+  const matching=tasks.filter(t=>normalizeDate(t.deadline)===dateStr&&t.status==="done");
+  tbody.innerHTML=matching.map(t=>{ const dl=deadlineLabel(t.deadline,t.status); return `<tr><td style="font-weight:500;">${esc(t.title)}</td><td>${priorityHTML(t.priority||"medium")}</td><td>${t.project?projectTagHTML(t.project):"—"}</td><td>${membersAvatarsHTML(t,22,9)}</td><td><span class="status-pill pill-done">Готово</span></td><td class="td-deadline">${dl?dl.text:"—"}</td><td><button class="action-btn" onclick="openEdit('${t.id}')">✎</button></td></tr>`; }).join("");
 }
 
 function exportPDF(){
