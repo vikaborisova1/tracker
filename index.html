@@ -208,6 +208,22 @@
   .score-bar-wrap{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;}
   .score-bar{height:100%;border-radius:4px;transition:width 0.5s;}
   .score-pct{font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace;min-width:40px;text-align:right;}
+  /* Files */
+  .files-section{border-top:1px solid var(--border);padding-top:14px;margin-top:14px;}
+  .file-upload-zone{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;cursor:pointer;transition:all 0.15s;margin-bottom:10px;}
+  .file-upload-zone:hover,.file-upload-zone.drag-over{border-color:var(--accent);background:var(--accent-light);}
+  .file-upload-zone p{font-size:12px;color:var(--text3);margin-top:4px;}
+  .file-upload-btn{font-size:12px;color:var(--accent);font-weight:500;cursor:pointer;background:none;border:none;font-family:'Onest',sans-serif;}
+  .file-list{display:flex;flex-direction:column;gap:6px;}
+  .file-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);}
+  .file-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .file-icon-img{background:#EBF0FD;}.file-icon-doc{background:#E8F5EE;}.file-icon-other{background:#F2EBF9;}
+  .file-info{flex:1;min-width:0;}
+  .file-name{font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .file-actions{display:flex;gap:6px;flex-shrink:0;}
+  .file-action-btn{font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text2);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;}
+  .file-action-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .file-uploading{font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px;}
   /* Heatmap */
   .heatmap-wrap{overflow-x:auto;padding-bottom:4px;}
   .heatmap-grid{display:flex;gap:3px;align-items:flex-start;}
@@ -484,6 +500,17 @@
       <div class="detail-field" id="d-repeat-field"><div class="detail-label">Повторение</div><div class="detail-value" id="d-repeat"></div></div>
     </div>
     <div class="detail-field" id="d-desc-field"><div class="detail-label">Описание</div><div class="detail-desc" id="d-desc"></div></div>
+    <!-- Files -->
+    <div class="files-section">
+      <div class="detail-label" style="margin-bottom:10px;">Вложения</div>
+      <div id="d-files"></div>
+      <div class="file-upload-zone" id="file-drop-zone" onclick="document.getElementById('file-input').click()" ondragover="fileDragOver(event)" ondragleave="fileDragLeave(event)" ondrop="fileDrop(event)">
+        <div>📎</div>
+        <p>Перетащи файл сюда или <button class="file-upload-btn">выбери на компьютере</button></p>
+        <p style="margin-top:2px;font-size:11px;">Изображения, PDF, документы — до 10 МБ</p>
+      </div>
+      <input type="file" id="file-input" style="display:none" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onchange="fileInputChange(event)">
+    </div>
     <!-- Comments -->
     <div class="comments-section">
       <div class="detail-label" style="margin-bottom:10px;">Комментарии</div>
@@ -930,6 +957,104 @@ function exportPDF(){
   },500);
 }
 
+// ── Files ─────────────────────────────────────────────
+function fileIconEmoji(mimeType){
+  if(!mimeType) return '📄';
+  if(mimeType.startsWith('image/')) return '🖼️';
+  if(mimeType.includes('pdf')) return '📕';
+  if(mimeType.includes('word')||mimeType.includes('document')) return '📝';
+  if(mimeType.includes('sheet')||mimeType.includes('excel')) return '📊';
+  if(mimeType.includes('presentation')||mimeType.includes('powerpoint')) return '📊';
+  return '📄';
+}
+function fileIconClass(mimeType){
+  if(!mimeType) return 'file-icon-other';
+  if(mimeType.startsWith('image/')) return 'file-icon-img';
+  if(mimeType.includes('pdf')||mimeType.includes('word')||mimeType.includes('document')) return 'file-icon-doc';
+  return 'file-icon-other';
+}
+
+async function renderFiles(taskId){
+  const el=document.getElementById('d-files');
+  el.innerHTML=`<div class="file-uploading"><div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> Загрузка...</div>`;
+  const res=await api('getFiles',{taskId});
+  if(!res.ok||!res.files||!res.files.length){el.innerHTML='';return;}
+  el.innerHTML=`<div class="file-list">${res.files.map(f=>`
+    <div class="file-item">
+      <div class="file-icon ${fileIconClass(f.mimeType)}">${fileIconEmoji(f.mimeType)}</div>
+      <div class="file-info"><div class="file-name" title="${esc(f.fileName)}">${esc(f.fileName)}</div></div>
+      <div class="file-actions">
+        ${f.mimeType&&f.mimeType.startsWith('image/')?`<a class="file-action-btn" href="${f.viewUrl}" target="_blank">👁 Просмотр</a>`:''}
+        <a class="file-action-btn" href="${f.fileUrl}" target="_blank">⬇ Скачать</a>
+        <button class="file-action-btn" style="color:var(--red);" onclick="deleteFile('${f.fileId}','${taskId}')">✕</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+async function deleteFile(fileId,taskId){
+  if(!confirm('Удалить файл?')) return;
+  const res=await api('deleteFile',{fileId});
+  if(res.ok){showToast('Файл удалён');renderFiles(taskId);}
+  else showToast('Не удалось удалить файл');
+}
+
+function fileDragOver(e){e.preventDefault();document.getElementById('file-drop-zone').classList.add('drag-over');}
+function fileDragLeave(e){document.getElementById('file-drop-zone').classList.remove('drag-over');}
+function fileDrop(e){
+  e.preventDefault();
+  document.getElementById('file-drop-zone').classList.remove('drag-over');
+  const files=Array.from(e.dataTransfer.files);
+  files.forEach(f=>uploadFile(f));
+}
+function fileInputChange(e){
+  Array.from(e.target.files).forEach(f=>uploadFile(f));
+  e.target.value='';
+}
+
+async function uploadFile(file){
+  if(!detailId){showToast('Сначала открой задачу');return;}
+  const MAX=10*1024*1024;
+  if(file.size>MAX){showToast(`Файл слишком большой: ${file.name}`);return;}
+  const zone=document.getElementById('file-drop-zone');
+  zone.innerHTML=`<div class="file-uploading"><div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> Загружаю ${esc(file.name)}...</div>`;
+  zone.onclick=null;
+
+  try{
+    const base64=await fileToBase64(file);
+    const res=await api('uploadFile',{
+      taskId:detailId,
+      fileName:detailId+'_'+file.name,
+      mimeType:file.type,
+      fileData:base64
+    });
+    if(res.ok){
+      showToast('Файл загружен!');
+      renderFiles(detailId);
+    } else {
+      showToast('Ошибка загрузки файла');
+    }
+  }catch(e){
+    showToast('Ошибка загрузки: '+e.message);
+  }finally{
+    zone.innerHTML=`<div>📎</div><p>Перетащи файл сюда или <button class="file-upload-btn">выбери на компьютере</button></p><p style="margin-top:2px;font-size:11px;">Изображения, PDF, документы — до 10 МБ</p>`;
+    zone.onclick=()=>document.getElementById('file-input').click();
+  }
+}
+
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      // strip data:...;base64, prefix
+      const result=reader.result;
+      const b64=result.split(',')[1];
+      resolve(b64);
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // ── Comments ──────────────────────────────────────────
 function renderComments(taskId){
   const list=comments[taskId]||[];
@@ -1081,6 +1206,7 @@ function openDetail(id){
   ).join('');
   document.getElementById('new-comment-text').value='';
   renderComments(id);
+  renderFiles(id);
   document.getElementById('detail-modal').classList.add('open');
 }
 async function changeStatus(id,status){
