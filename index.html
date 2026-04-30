@@ -33,6 +33,9 @@
   .stat-value{font-size:26px;font-weight:600;letter-spacing:-0.03em;font-family:'JetBrains Mono',monospace;}
   .stat-value.red{color:var(--red);}.stat-value.amber{color:var(--amber);}.stat-value.green{color:var(--green);}
   .stat-sub{font-size:11px;color:var(--text3);margin-top:3px;}
+  .stat-clickable{cursor:pointer;transition:box-shadow 0.15s,transform 0.1s;}
+  .stat-clickable:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);}
+  .stat-period-badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--green-light);color:var(--green);border:1px solid #B3DECA;white-space:nowrap;}
   .tabs-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
   .tabs{display:flex;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;gap:2px;border:1px solid var(--border);}
   .tab-btn{padding:6px 14px;border:none;background:none;border-radius:4px;font-size:13px;font-family:'Onest',sans-serif;font-weight:500;color:var(--text2);cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:6px;}
@@ -239,10 +242,29 @@
     </div>
   </div>
   <div class="stats">
-    <div class="stat"><div class="stat-label">Всего задач</div><div class="stat-value" id="s-total">—</div><div class="stat-sub">активных</div></div>
-    <div class="stat"><div class="stat-label">Просрочено</div><div class="stat-value red" id="s-overdue">—</div><div class="stat-sub">требуют внимания</div></div>
-    <div class="stat"><div class="stat-label">На этой неделе</div><div class="stat-value amber" id="s-week">—</div><div class="stat-sub">дедлайн 7 дней</div></div>
-    <div class="stat"><div class="stat-label">Выполнено</div><div class="stat-value green" id="s-done">—</div><div class="stat-sub">всего за всё время</div></div>
+    <div class="stat">
+      <div class="stat-label">Всего задач</div>
+      <div class="stat-value" id="s-total">—</div>
+      <div class="stat-sub">активных сейчас</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Просрочено</div>
+      <div class="stat-value red" id="s-overdue">—</div>
+      <div class="stat-sub" id="s-overdue-sub">требуют внимания</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">На этой неделе</div>
+      <div class="stat-value amber" id="s-week">—</div>
+      <div class="stat-sub" id="s-week-sub">дедлайны пн–вс</div>
+    </div>
+    <div class="stat stat-clickable" onclick="cycleDonePeriod()" title="Нажми чтобы сменить период">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="stat-label">Выполнено</div>
+        <div class="stat-period-badge" id="s-done-badge">за всё время</div>
+      </div>
+      <div class="stat-value green" id="s-done">—</div>
+      <div class="stat-sub" id="s-done-sub">нажми чтобы сменить период</div>
+    </div>
   </div>
   <div class="tabs-bar">
     <div class="tabs">
@@ -492,6 +514,19 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function localDateStr(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;}
 function today(){return localDateStr(new Date());}
 function weekFromNow(){const d=new Date();d.setDate(d.getDate()+7);return localDateStr(d);}
+function weekStart(){const d=new Date();const dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return localDateStr(d);}
+function weekEnd(){const d=new Date();const dow=(d.getDay()+6)%7;d.setDate(d.getDate()+(6-dow));return localDateStr(d);}
+function monthStart(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;}
+function monthEnd(){const d=new Date(new Date().getFullYear(),new Date().getMonth()+1,0);return localDateStr(d);}
+
+let donePeriod='all'; // 'all' | 'month' | 'week'
+const DONE_PERIODS=['all','month','week'];
+const DONE_PERIOD_LABELS={all:'за всё время',month:'за этот месяц',week:'за эту неделю'};
+function cycleDonePeriod(){
+  const idx=DONE_PERIODS.indexOf(donePeriod);
+  donePeriod=DONE_PERIODS[(idx+1)%DONE_PERIODS.length];
+  renderStats();
+}
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function memberColor(n){const i=members.indexOf(n);return i>=0?ALL_AV_COLORS[i%ALL_AV_COLORS.length]:'av-0';}
 function initials(n){return (n||'').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);}
@@ -500,7 +535,7 @@ function normalizeDate(dl){
   if(s.match(/^\d{4}-\d{2}-\d{2}$/))return s;
   const d=new Date(s);if(isNaN(d))return '';return localDateStr(d);
 }
-function deadlineStatus(dl){const n=normalizeDate(dl);if(!n)return '';if(n<today())return 'overdue';if(n<=weekFromNow())return 'soon';return '';}
+function deadlineStatus(dl){const n=normalizeDate(dl);if(!n)return '';if(n<today())return 'overdue';if(n<=weekEnd())return 'soon';return '';}
 function formatDate(dl){
   if(!dl)return '—';const s=String(dl).trim();
   if(s.includes('-')){const[y,m,d]=s.split('-');return `${d}.${m}.${y}`;}
@@ -616,10 +651,30 @@ function renderMemberSelects(){
   document.getElementById('filter-priority').classList.toggle('active',!!document.getElementById('filter-priority').value);
 }
 function renderStats(){
+  const ws=weekStart(), we=weekEnd();
+  // Total active
   document.getElementById('s-total').textContent=tasks.filter(t=>t.status!=='done').length;
+  // Overdue
   document.getElementById('s-overdue').textContent=tasks.filter(t=>t.status!=='done'&&t.deadline&&normalizeDate(t.deadline)<today()).length;
-  document.getElementById('s-week').textContent=tasks.filter(t=>t.status!=='done'&&t.deadline&&normalizeDate(t.deadline)>=today()&&normalizeDate(t.deadline)<=weekFromNow()).length;
-  document.getElementById('s-done').textContent=tasks.filter(t=>t.status==='done').length;
+  // This week deadlines (Mon–Sun of current week)
+  const weekTasks=tasks.filter(t=>t.status!=='done'&&t.deadline&&normalizeDate(t.deadline)>=ws&&normalizeDate(t.deadline)<=we);
+  document.getElementById('s-week').textContent=weekTasks.length;
+  // Format Mon dd.mm – Sun dd.mm
+  const fmtShort=d=>{const[y,m,day]=d.split('-');return `${day}.${m}`;};
+  document.getElementById('s-week-sub').textContent=`пн ${fmtShort(ws)} — вс ${fmtShort(we)}`;
+  // Done with period
+  let doneTasks;
+  if(donePeriod==='week'){
+    doneTasks=tasks.filter(t=>t.status==='done'&&t.deadline&&normalizeDate(t.deadline)>=ws&&normalizeDate(t.deadline)<=we);
+  } else if(donePeriod==='month'){
+    doneTasks=tasks.filter(t=>t.status==='done'&&t.deadline&&normalizeDate(t.deadline)>=monthStart()&&normalizeDate(t.deadline)<=monthEnd());
+  } else {
+    doneTasks=tasks.filter(t=>t.status==='done');
+  }
+  document.getElementById('s-done').textContent=doneTasks.length;
+  document.getElementById('s-done-badge').textContent=DONE_PERIOD_LABELS[donePeriod];
+  const subTexts={all:'нажми чтобы сменить период',month:`${fmtShort(monthStart())} — ${fmtShort(monthEnd())}`,week:`пн ${fmtShort(ws)} — вс ${fmtShort(we)}`};
+  document.getElementById('s-done-sub').textContent=subTexts[donePeriod];
 }
 
 function taskCardHTML(t){
