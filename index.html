@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Трекер команды</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐️</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
@@ -669,12 +669,13 @@ function renderStats(){
   // Format Mon dd.mm – Sun dd.mm
   const fmtShort=d=>{const[y,m,day]=d.split('-');return `${day}.${m}`;};
   document.getElementById('s-week-sub').textContent=`пн ${fmtShort(ws)} — вс ${fmtShort(we)}`;
-  // Done with period
+  // Done with period — use completedAt if available, fallback to deadline
+  function doneDate(t){ return normalizeDate(t.completedAt||t.deadline||''); }
   let doneTasks;
   if(donePeriod==='week'){
-    doneTasks=tasks.filter(t=>t.status==='done'&&t.deadline&&normalizeDate(t.deadline)>=ws&&normalizeDate(t.deadline)<=we);
+    doneTasks=tasks.filter(t=>t.status==='done'&&doneDate(t)>=ws&&doneDate(t)<=we&&doneDate(t));
   } else if(donePeriod==='month'){
-    doneTasks=tasks.filter(t=>t.status==='done'&&t.deadline&&normalizeDate(t.deadline)>=monthStart()&&normalizeDate(t.deadline)<=monthEnd());
+    doneTasks=tasks.filter(t=>t.status==='done'&&doneDate(t)>=monthStart()&&doneDate(t)<=monthEnd()&&doneDate(t));
   } else {
     doneTasks=tasks.filter(t=>t.status==='done');
   }
@@ -762,12 +763,13 @@ function renderMembers(){
     const total=mt.length;
     const inprog=mt.filter(t=>t.status==='doing').length;
     const overdue=mt.filter(t=>t.status!=='done'&&t.deadline&&normalizeDate(t.deadline)<today()).length;
-    // done filtered by donePeriod
+    // done filtered by donePeriod — use completedAt if available, fallback to deadline
+    function doneDate(t){ return normalizeDate(t.completedAt||t.deadline||''); }
     let doneTasks;
     if(donePeriod==='week'){
-      doneTasks=mt.filter(t=>t.status==='done'&&t.deadline&&normalizeDate(t.deadline)>=ws&&normalizeDate(t.deadline)<=we);
+      doneTasks=mt.filter(t=>t.status==='done'&&doneDate(t)&&doneDate(t)>=ws&&doneDate(t)<=we);
     } else if(donePeriod==='month'){
-      doneTasks=mt.filter(t=>t.status==='done'&&t.deadline&&normalizeDate(t.deadline)>=monthStart()&&normalizeDate(t.deadline)<=monthEnd());
+      doneTasks=mt.filter(t=>t.status==='done'&&doneDate(t)&&doneDate(t)>=monthStart()&&doneDate(t)<=monthEnd());
     } else {
       doneTasks=mt.filter(t=>t.status==='done');
     }
@@ -1010,6 +1012,7 @@ async function saveTask(){
   const btn=document.getElementById('btn-save-task');
   btn.disabled=true;btn.textContent='Сохраняю...';
   const repeatVal=document.getElementById('f-repeat').value;
+  const existing=tasks.find(x=>x.id===editingId)||{};
   const task={
     id:editingId||uid(),title,
     desc:document.getElementById('f-desc').value.trim(),
@@ -1020,8 +1023,12 @@ async function saveTask(){
     status:document.getElementById('f-status').value,
     repeat:repeatVal,
     repeatDays:repeatVal==='custom'?document.getElementById('f-repeat-days').value:'',
-    created:editingId?(tasks.find(x=>x.id===editingId)||{}).created||today():today()
+    created:editingId?existing.created||today():today(),
+    completedAt:editingId?existing.completedAt||'':''
   };
+  // auto-set completedAt if saving as done
+  if(task.status==='done'&&!task.completedAt) task.completedAt=today();
+  if(task.status!=='done') task.completedAt='';
   const res=await api('saveTask',{task});
   btn.disabled=false;btn.textContent='Сохранить';
   if(res.ok){
@@ -1064,6 +1071,12 @@ function openDetail(id){
 async function changeStatus(id,status){
   const t=tasks.find(x=>x.id===id);if(!t)return;
   const prev=t.status;t.status=status;
+  // record completion date when moving to done
+  if(status==='done'&&prev!=='done'){
+    t.completedAt=today();
+  } else if(status!=='done'&&prev==='done'){
+    t.completedAt=''; // clear if moved back
+  }
   if(status==='done'&&t.repeat)createNextOccurrence(t);
   render();openDetail(id);
   const res=await api('saveTask',{task:t});
