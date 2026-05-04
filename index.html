@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Трекер команды</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
@@ -531,8 +530,13 @@ const DONE_PERIOD_LABELS={all:'за всё время',month:'за этот ме
 function cycleDonePeriod(){
   const idx=DONE_PERIODS.indexOf(donePeriod);
   donePeriod=DONE_PERIODS[(idx+1)%DONE_PERIODS.length];
+  // sync analyticsPeriod
+  analyticsPeriod=donePeriod==='week'?'week':donePeriod==='month'?'month':'all';
+  document.getElementById('period-month').classList.toggle('active',analyticsPeriod==='month');
+  document.getElementById('period-all').classList.toggle('active',analyticsPeriod==='all');
   renderStats();
   renderMembers();
+  if(currentTab==='analytics') renderAnalytics();
 }
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function memberColor(n){const i=members.indexOf(n);return i>=0?ALL_AV_COLORS[i%ALL_AV_COLORS.length]:'av-0';}
@@ -826,18 +830,55 @@ function renderCalendar(){
   document.getElementById('cal-grid').innerHTML=html;
 }
 
-function setPeriod(p){analyticsPeriod=p;document.getElementById('period-month').classList.toggle('active',p==='month');document.getElementById('period-all').classList.toggle('active',p==='all');renderAnalytics();}
-function getAnalyticsTasks(){
-  if(analyticsPeriod==='all')return tasks;
-  const now=new Date(),yr=now.getFullYear(),mo=String(now.getMonth()+1).padStart(2,'0'),prefix=`${yr}-${mo}`;
-  return tasks.filter(t=>{const c=normalizeDate(t.created||''),d=normalizeDate(t.deadline||'');return (c&&c.startsWith(prefix))||(d&&d.startsWith(prefix));});
+function setPeriod(p){
+  // sync analyticsPeriod with donePeriod
+  donePeriod=p==='month'?'month':p==='week'?'week':'all';
+  analyticsPeriod=p;
+  document.getElementById('period-month').classList.toggle('active',p==='month');
+  document.getElementById('period-all').classList.toggle('active',p==='all');
+  renderStats();
+  renderMembers();
+  renderAnalytics();
 }
+
+function doneDate(t){ return normalizeDate(t.completedAt||t.deadline||''); }
+
+function getAnalyticsTasks(){
+  // use same donePeriod logic and completedAt as the rest of the app
+  if(analyticsPeriod==='all') return tasks;
+  const ws=weekStart(), we=weekEnd();
+  if(analyticsPeriod==='week'){
+    return tasks.filter(t=>{
+      if(t.status==='done'){ const d=doneDate(t); return d&&d>=ws&&d<=we; }
+      const d=normalizeDate(t.deadline||'');
+      return d&&d>=ws&&d<=we;
+    });
+  }
+  // month
+  const ms=monthStart(), me=monthEnd();
+  return tasks.filter(t=>{
+    if(t.status==='done'){ const d=doneDate(t); return d&&d>=ms&&d<=me; }
+    const d=normalizeDate(t.deadline||t.created||'');
+    return d&&d>=ms&&d<=me;
+  });
+}
+
 function destroyChart(c){if(c){try{c.destroy();}catch(e){}}return null;}
+
 function renderAnalytics(){
   const aTasks=getAnalyticsTasks();
+  const allDone=tasks.filter(t=>t.status==='done');
+
+  // Score — use completedAt for on-time check: completed before or on deadline
   document.getElementById('score-list').innerHTML=members.map((name,i)=>{
     const mt=aTasks.filter(t=>taskHasMember(t,name)&&t.status==='done');
-    const total=mt.length,onTime=mt.filter(t=>{const d=normalizeDate(t.deadline);return !d||d>=normalizeDate(t.created||today());}).length;
+    const total=mt.length;
+    const onTime=mt.filter(t=>{
+      const dl=normalizeDate(t.deadline);
+      const cd=doneDate(t);
+      if(!dl) return true; // no deadline = always on time
+      return cd<=dl;
+    }).length;
     const pct=total?Math.round(onTime/total*100):0;
     const barColor=pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
     return `<div class="member-score-row">
@@ -853,18 +894,36 @@ function renderAnalytics(){
       <div class="score-pct" style="color:${barColor};">${pct}%</div>
     </div>`;
   }).join('');
-  const sc={todo:aTasks.filter(t=>t.status==='todo').length,doing:aTasks.filter(t=>t.status==='doing').length,done:aTasks.filter(t=>t.status==='done').length};
+
+  // Status donut — active tasks always all, done from period
+  const sc={
+    todo:tasks.filter(t=>t.status==='todo').length,
+    doing:tasks.filter(t=>t.status==='doing').length,
+    done:aTasks.filter(t=>t.status==='done').length
+  };
   chartStatus=destroyChart(chartStatus);
   chartStatus=new Chart(document.getElementById('chart-status').getContext('2d'),{type:'doughnut',data:{labels:['К выполнению','В работе','Готово'],datasets:[{data:[sc.todo,sc.doing,sc.done],backgroundColor:['#D3D1C7','#2D5BE3','#1E7D4E'],borderWidth:0}]},options:{plugins:{legend:{position:'bottom',labels:{font:{family:'Onest',size:11},padding:12}}},cutout:'60%',maintainAspectRatio:false}});
+
+  // Members bar — done by period using completedAt
   chartMembers=destroyChart(chartMembers);
   chartMembers=new Chart(document.getElementById('chart-members').getContext('2d'),{type:'bar',data:{labels:members,datasets:[{label:'Выполнено',data:members.map(m=>aTasks.filter(t=>taskHasMember(t,m)&&t.status==='done').length),backgroundColor:CHART_COLORS.slice(0,members.length),borderRadius:4,borderWidth:0}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{family:'JetBrains Mono',size:10}},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{font:{family:'Onest',size:11}}}},maintainAspectRatio:false}});
+
+  // Projects bar
   chartProjects=destroyChart(chartProjects);
   chartProjects=new Chart(document.getElementById('chart-projects').getContext('2d'),{type:'bar',data:{labels:projects,datasets:[{label:'Задач',data:projects.map(p=>aTasks.filter(t=>t.project===p).length),backgroundColor:CHART_COLORS.map(c=>c+'99'),borderRadius:4,borderWidth:0}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{family:'JetBrains Mono',size:10}},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{font:{family:'Onest',size:11}}}},maintainAspectRatio:false}});
+
+  // Trend — use completedAt for all done tasks (not filtered by period)
   const weekMap={};
-  aTasks.filter(t=>t.status==='done'&&t.deadline).forEach(t=>{const d=normalizeDate(t.deadline);if(!d)return;const dt=new Date(d),mon=new Date(dt);mon.setDate(dt.getDate()-((dt.getDay()+6)%7));const key=localDateStr(mon);weekMap[key]=(weekMap[key]||0)+1;});
+  allDone.forEach(t=>{
+    const d=doneDate(t);if(!d)return;
+    const dt=new Date(d),mon=new Date(dt);
+    mon.setDate(dt.getDate()-((dt.getDay()+6)%7));
+    const key=localDateStr(mon);weekMap[key]=(weekMap[key]||0)+1;
+  });
   const wk=Object.keys(weekMap).sort();
   chartTrend=destroyChart(chartTrend);
   chartTrend=new Chart(document.getElementById('chart-trend').getContext('2d'),{type:'line',data:{labels:wk.map(k=>{const[y,m,d]=k.split('-');return `${d}.${m}`;}),datasets:[{label:'Закрыто задач',data:wk.map(k=>weekMap[k]),borderColor:'#2D5BE3',backgroundColor:'rgba(45,91,227,0.08)',tension:0.3,pointRadius:4,pointBackgroundColor:'#2D5BE3',fill:true,borderWidth:2}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{family:'JetBrains Mono',size:10}},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{font:{family:'Onest',size:11},maxRotation:0}}},maintainAspectRatio:false}});
+
   renderHeatmap(tasks);
 }
 
@@ -872,7 +931,7 @@ function renderHeatmap(allTasks){
   const MONTHS_SHORT=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
   const DAY_LABELS=['','Пн','','Ср','','Пт',''];
   const countMap={};
-  allTasks.filter(t=>t.status==='done'&&t.deadline).forEach(t=>{const d=normalizeDate(t.deadline);if(d)countMap[d]=(countMap[d]||0)+1;});
+  allTasks.filter(t=>t.status==='done').forEach(t=>{const d=doneDate(t);if(d)countMap[d]=(countMap[d]||0)+1;});
   const todayDate=new Date(),todayMon=(todayDate.getDay()+6)%7;
   const endDate=new Date(todayDate);endDate.setDate(endDate.getDate()+(6-todayMon));
   const WEEKS=26,startDate=new Date(endDate);startDate.setDate(endDate.getDate()-(WEEKS*7-1));
